@@ -548,7 +548,7 @@ if min_len_activity <= framesize_s:
 
 # set path to input directory, conatining mutliple recording folders
 # named by date [yyyymmdd]:
-input_dic = 'y:/Langzeitaufnahmen_Akustiklabor_Messtechnik/'
+input_dic = 'y:/YourRecordingFolder/'
 
 # set a path to a target directory to store the samples in:
 target_dic = 'y:/DataSets/InsectSound1000v2'
