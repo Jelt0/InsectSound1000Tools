@@ -1,23 +1,24 @@
 
 """
-Preprocessing Script Generating Audio-Samples out of a large 
-recording file.
+Preprocessing script generating audio samples out of a folder full of large
+recording files.
 
 The calculation of the activity level is roughly based on the process
 described in section II B in:
+
 Z. Le-Qing, "Insect Sound Recognition Based on MFCC and PNN," 2011 
 International Conference on Multimedia and Signal Processing, Guilin, 
-China, 2011, pp. 42-46, doi: 10.1109/CMSP.2011.100
+China, 2011, pp. 42-46, doi: 10.1109/CMSP.2011.100 
 
-Input is a TDMS-files.
-Output are wave-files 
+Input is a TDMS file.
+Output is WAVE files.
 
 Please cite:
 
 Branding et al. (2023), Scientific Data, InsectSound1000 An Insect
 Sound Dataset for Deep Learning based Acoustic Insect Recognition
 
-                                                    Jelto Branding, 2023-10-13
+                                                    Jelto Branding
 """
 
 # puplic imports:
@@ -40,46 +41,46 @@ from fetchfiles import fetchfiles
 
 def butter_highpass_filter(data, fs, cut_off, order):
     """ Highpass filter """
-    # cal normalised cut off frequencies:
+    # calculate normalised cut-off frequencies:
     normal_cutoff = cut_off / (0.5*fs)
-    # Get the filter coefficients
+    # get the filter coefficients
     sos = butter(order, normal_cutoff, btype='high', analog=False,
                  output='sos')
-    # Apply filter
+    # apply filter
     filtered = sosfilt(sos , data)
     return filtered
 
 
 def butter_lowpass_filter(data, fs, cut_off, order):
     """ Lowpass filter """
-    # cal normalised cut off frequencies:
+    # calculate normalised cut-off frequencies:
     normal_cutoff = cut_off / (0.5*fs)
-    # Get the filter coefficients
+    # get the filter coefficients
     sos = butter(order, normal_cutoff, btype='low', analog=False, output='sos')
-    # Apply filter
+    # apply filter
     filtered = sosfilt(sos, data)
     return filtered
 
 
 def est_energies(data, stepsize, framesize):
     """
-    Slide a window over the data and calc the energy contained in each.
+    Slide a window over the data and calculate the energy contained in each.
     """
     # Parameters:
-    K = len(data)       # Number of sample points in recording
+    K = len(data)       # number of sample points in recording
     L = stepsize        # stepsize (in sample points)
     N = framesize       # frame size (in sample points)
 
-    # Generate idx-matrix for vectorized windowing:
+    # generate idx-matrix for vectorised windowing:
     a = np.arange(0, N)
     b = np.arange(0, (K-N+1), L)
     idx = b[:, np.newaxis] + a
 
-    # Calc energies by means of vector operations and
-    # get energy of the frame by summing up every row:
+    # Calculate energies by means of vector operations and
+    # get the energy of the frame by summing up every row:
     frame_energies = np.sum((data[idx] ** 2), axis=1)
 
-    # Normalise by dividing through framesize:
+    # Normalise by dividing through frame size:
     frame_energies = frame_energies / framesize
 
     return frame_energies
@@ -88,18 +89,17 @@ def est_energies(data, stepsize, framesize):
 @njit
 def get_activity(data, rate, stepsize, framesize, frame_energies, thres):
     """
-    Mark sections of activity in recording.
+    Mark sections of activity in the recording.
     """
-
     # Parameters:
-    K = len(data)  # Number of sample points in recording
-    L = stepsize  # stepsize (in sample points)
+    K = len(data)  # number of sample points in recording
+    L = stepsize   # stepsize (in sample points)
     N = framesize  # frame size (in sample points)
     
     # empty array for activity:
     active = np.zeros((K, 1), dtype=np.bool_)
 
-    # Mark sections of activity in record:
+    # Mark sections of activity in the record:
     for k, energy in enumerate(frame_energies):
         if energy > thres:
             i_start = k * L
@@ -111,17 +111,17 @@ def get_activity(data, rate, stepsize, framesize, frame_energies, thres):
 
 def get_segments(data, data_ori, rate, active, min_len_activity, len_sample):
     """
-    Extract valid samples from recording.
+    Extract valid samples from the recording.
     """
 
     def add_sample_to_dict(data, data_ori, min_len, len_sample, ind_1, ind_2,
                            s, this_dict):
-        '''now process this segment:'''
+        '''Now process this segment:'''
 
         # skip this sample if this activity is already captured by the
         # previous sample:
         if s > 1:
-            # get end of last sample:
+            # get the end of the last sample:
             s_2_previous = int(this_dict[s-1][-1, 0])
             if ind_2 < s_2_previous:
                 print('This sample was skipped, because all its data is'
@@ -143,12 +143,12 @@ def get_segments(data, data_ori, rate, active, min_len_activity, len_sample):
 
             else:
                 # shorter than full len_sample:
-                # Get center as middle between ind_2 and ind_1
+                # get centre as middle between ind_2 and ind_1
                 center = int((ind_2 + ind_1) / 2)
                 # get start index:
                 s_1 = int(center - (len_sample / 2))
                 
-                # if sample is on the very beginning, start at zero:
+                # If the sample is on the very beginning, start at zero:
                 if s_1 < 0:
                     s_1 = 0
                     # set end as after one sample length:
@@ -157,23 +157,23 @@ def get_segments(data, data_ori, rate, active, min_len_activity, len_sample):
                 # else get the normal end:
                 else:
                     s_2 = int(center + (len_sample / 2))
-                    # but if at the very end, stop at end:
+                    # but if at the very end, stop at the end:
                     if s_2 > len(data):
                         s_2 = len(data)
-                        # set beginning as one len_sample before
+                        # Set beginning as one len_sample before
                         # file end:
                         s_1 = int(len(data) - len_sample)
 
                 # Make sure samples don't overlap:
-                # if sample start ist before last sample end, ...:
+                # If sample start is before last sample end, ...:
                 if s > 1 and s_1 < s_2_previous:
                     s_1 = s_2_previous
                     s_2 = s_1 + len_sample
                     
-                # if sample is at the very end, dicard it:
+                # if the sample is at the very end, discard it:
                 if s_2 > len(data_ori)-2:
                     print('This sample was skipped, '
-                          'because it is at the very end of a recoding.')
+                          'because it is at the very end of a recording.')
                     return this_dict, s
 
             # Add sample to output dict:
@@ -193,29 +193,29 @@ def get_segments(data, data_ori, rate, active, min_len_activity, len_sample):
     # Prep:
     len_sample = int(len_sample * rate)      # get this in samples
     min_len = int(min_len_activity * rate)   # get this in samples
-    dict = {}                                # Create dict to store results in
-    s = 1                                    # Counting stuff
+    dict = {}                                # create dict to store results in
+    s = 1                                    # counting stuff
 
-    # Now go through activity array:
+    # Now go through the activity array:
     i = 0
     while i < len(active):
         # if active, start new activity:
         if active[i]:
             ind_1 = i
-            # first, set end of activity equal to full length sample
+            # First, set the end of the activity equal to the length of a sample
             ind_2 = i + len_sample
-            # if this is already the end of the recording, stop here:
+            # If this is already the end of the recording, stop here:
             if ind_2 > len(active):
                 ind_2 = len(active)-1
                 
-            # now starting form ind_2 look backwarts for the actual end:
+            # Now, starting from ind_2, look backwards for the actual end:
             if not active[ind_2]:
                 for j in range(len_sample):
                     if active[ind_2-j]:
                         ind_2 = ind_2-j
                         break
 
-            # add sample to sample dict:
+            # Add sample to sample dict:
             dict, s = add_sample_to_dict(data, data_ori,
                                          min_len, len_sample, ind_1,
                                          ind_2, s, dict)
@@ -251,17 +251,18 @@ def save_samples(samples_dict, rate, fullfilepath, ch):
 def plot_all_the_things(data, rate, frame_energies, thres, samples_dict,
                         filename_wav_in, ch, show='off', safe='on'):
     """
-    Name says it all. Can be used for debugging and finding good settings.
+    The name says it all. It can be used for debugging and finding good
+    settings.
     """
 
     # Prep:
     time_array = (np.arange(0, len(data), 1)) / rate
-    # streche frame_energies to length of data:
+    # Streche frame_energies to length of data:
     t_data = np.arange(0, len(data), 1)
     t_frame_energies = np.linspace(0, len(data), len(frame_energies), dtype=int)
     frame_energies = np.interp(t_data, t_frame_energies, frame_energies)
 
-    # if plot to long than 1 min, create multiple plots:
+    # If plot longer than 1 min, create multiple plots:
     len_s = int(len(data)/rate)
     if len_s > 61:
         for i in range(20, len_s, 50):
@@ -276,12 +277,12 @@ def plot_all_the_things(data, rate, frame_energies, thres, samples_dict,
             data_snipped = data[snipped_start:snipped_stop]
             frame_energies_snipped = frame_energies[snipped_start:snipped_stop]
 
-            # Count throw filenames:
+            # Count through filenames:
             folder, filename = os.path.split(filename_wav_in)
             plotname = filename[:-4] + '_ch%s_%ss_to_%ss' \
                        % (ch, int(snipped_start/rate), int(snipped_stop/rate))
 
-            # call plot_function for this snipped:
+            # Call plot_function for this snipped:
             plot_results(time_snipped, data_snipped, frame_energies_snipped,
                          rate, thres, samples_dict, filename_wav_in, ch, show,
                          safe, plotname)
@@ -329,7 +330,7 @@ def plot_results(time_array, data, frame_energies, rate, thres,
     axs2.set_title('Energy and Energy Threshold')
     axs2.set_ylabel('Magnitude')
 
-    # Adding the Spectrogram:
+    # Adding the spectrogram:
     # Create spectrogram :
     f, t, Sxx = signal.spectrogram(data, rate,
                                    window=('hann'),
@@ -394,11 +395,11 @@ def stopwatch(function_name, last_timestamp):
 
 
 def pic_loudest_ch(data_multi_ch):
-    # square signal to get rid of negativ values:
+    # square signal to get rid of negative values:
     data_multi_ch_power = data_multi_ch ** 2
-    # get sum of every squared channel as a rough estimate of channel energy:
+    # get the sum of every squared channel as a rough estimate of channel energy:
     ch_sums = data_multi_ch_power.sum(axis=0)
-    # get index of loudest channel:
+    # get the index of the loudest channel:
     ch = np.argmax(ch_sums)
     # separate loudest channel:
     loudest_ch = data_multi_ch[:, ch]
@@ -407,9 +408,9 @@ def pic_loudest_ch(data_multi_ch):
 
 
 def read_tdms(filename):
-    # create empty array to store data:
+    # Create an empty array to store data:
     data = []
-    # read tdm-file:
+    # read tdms-file:
     tdms_file = TdmsFile.read(filename)
     for group in tdms_file.groups():
         group_name = group.name
@@ -433,7 +434,7 @@ def read_tdms(filename):
 
 
 def resample_multi_ch(data_in, sr_in, sr_out):
-    """resamples multi-channel audio data"""
+    """Resamples multi-channel audio data"""
 
     for ch in range(data_in.shape[1]):
         channel_data = librosa.resample(data_in[:, ch],
@@ -465,64 +466,65 @@ def main(filename_wav_in, stepsize_s, framesize_s, median_th, min_len_activity,
     
     timestamp = stopwatch('resample_multi_ch', timestamp)
 
-    # if its a 5 or 6 channel recording form my measurment mic array,
+    # If it is a 5- or 6-channel recording from my measurement mic array,
     # discard the last 2 channels and loop over the first 4:
     if data_multi_ch.shape[1] == 6:
-        # delete channels containing outside recoding:
+        # delete channels containing outside recording:
         data_multi_ch = np.delete(data_multi_ch, [4, 5], 1)
-        # get index of loudest channel in array recording:
-        data_ch, ch = pic_loudest_ch(data_multi_ch)
-        # FOR DEBUGGING ONLY: cut to first 5 min :
-        #data_ch = data_ch[:(rate*60*5)]
-
-        timestamp = stopwatch('pic_loudest_ch', timestamp)
-
-        # Apply a fast and good enough IIR lowpass filter to loudest ch:
-        data_ch = butter_lowpass_filter(data_ch, rate, 1500, 4)
-        # Apply a still fast and good enough IIR highpass filter to loudest ch:
-        data_ch = butter_highpass_filter(data_ch, rate, 180, 30)
         
-        timestamp = stopwatch('band_pass_filtering', timestamp)
-      
-        # Segmentation:
-        # Estimate the energy contained in different parts of the
-        # recording by moving a frame over the record and estimating the
-        # energy contained by the signal in the frame:
-        stepsize = int(stepsize_s * rate)
-        framesize = int(framesize_s * rate)
-        frame_energies = est_energies(data_ch, stepsize, framesize)
+    # get the index of the loudest channel in the array recording:
+    data_ch, ch = pic_loudest_ch(data_multi_ch)
+    # FOR DEBUGGING ONLY: cut to first 5 min :
+    #data_ch = data_ch[:(rate*60*5)]
 
-        timestamp = stopwatch('frame_energies', timestamp)
+    timestamp = stopwatch('pic_loudest_ch', timestamp)
 
-        # Calc energy_th:
-        energy_th = np.median(frame_energies) * median_th
+    # Apply a fast and good enough IIR lowpass filter to the loudest ch:
+    data_ch = butter_lowpass_filter(data_ch, rate, 1500, 4)
+    # Apply a still fast and good enough IIR highpass filter to the loudest ch:
+    data_ch = butter_highpass_filter(data_ch, rate, 180, 30)
+    
+    timestamp = stopwatch('band_pass_filtering', timestamp)
+    
+    # Segmentation:
+    # Estimate the energy contained in different parts of the
+    # recording by moving a frame over the record and estimating the
+    # energy contained by the signal in the frame:
+    stepsize = int(stepsize_s * rate)
+    framesize = int(framesize_s * rate)
+    frame_energies = est_energies(data_ch, stepsize, framesize)
 
-        # Find activity within the recording :
-        active = get_activity(data_ch, rate, stepsize, framesize,
-                                  frame_energies, energy_th)
+    timestamp = stopwatch('frame_energies', timestamp)
 
-        timestamp = stopwatch('get_activity', timestamp)
+    # Calc energy_th:
+    energy_th = np.median(frame_energies) * median_th
 
-        # Extract valid samples:
-        samples_dict = get_segments(data_ch, data_multi_ch, rate, active,
-                                 min_len_activity, len_sample)
+    # Find activity within the recording :
+    active = get_activity(data_ch, rate, stepsize, framesize,
+                                frame_energies, energy_th)
 
-        timestamp = stopwatch('get_segments', timestamp)
+    timestamp = stopwatch('get_activity', timestamp)
 
-        # Save samples:
-        save_samples(samples_dict, rate, filename_wav_in, ch)
+    # Extract valid samples:
+    samples_dict = get_segments(data_ch, data_multi_ch, rate, active,
+                                min_len_activity, len_sample)
 
-        timestamp = stopwatch('save_samples', timestamp)
+    timestamp = stopwatch('get_segments', timestamp)
 
-        # Plot all the things:
-        #plot_all_the_things(data, rate, frame_energies, energy_th,
-        #                    samples_dict, filename_wav_in, ch, show='off',
-        #                    safe='on')
+    # Save samples:
+    save_samples(samples_dict, rate, filename_wav_in, ch)
 
-        #timestamp = stopwatch('plot_all_the_things', timestamp)
+    timestamp = stopwatch('save_samples', timestamp)
 
-        if len(samples_dict) == 0:
-            print('No valid samples where found in %s' % filename_wav_in)
+    # Plot all the things:
+    #plot_all_the_things(data, rate, frame_energies, energy_th,
+    #                    samples_dict, filename_wav_in, ch, show='off',
+    #                    safe='on')
+
+    #timestamp = stopwatch('plot_all_the_things', timestamp)
+
+    if len(samples_dict) == 0:
+        print('No valid samples where found in %s' % filename_wav_in)
 
 
 ###############################################################################
@@ -530,14 +532,14 @@ def main(filename_wav_in, stepsize_s, framesize_s, median_th, min_len_activity,
 # Start the clock first:
 start_time = time.time()
 
-# Energy threshold for detecting activity as times means value
+# Energy threshold for detecting activity as [times mean value]:
 energy_th = 1.60
 
 # Set minimum activity length and sample length [s]:
 min_len_activity = 1
 len_sample = 2.5
 
-# Set stepsize and framesize of energy estimation:
+# Set stepsize and frame size of energy estimation:
 times_the_paper_value = 20
 stepsize_s = 0.0032 * times_the_paper_value
 framesize_s = 0.01024 * times_the_paper_value
@@ -546,14 +548,14 @@ framesize_s = 0.01024 * times_the_paper_value
 if min_len_activity <= framesize_s:
     min_len_activity = framesize_s * 1.5
 
-# set path to input directory, conatining mutliple recording folders
+# Set path to input directory, containing multiple recording folders
 # named by date [yyyymmdd]:
 input_dic = 'y:/YourRecordingFolder/'
 
 # set a path to a target directory to store the samples in:
-target_dic = 'y:/DataSets/InsectSound1000v2'
+target_dic = 'y:/DataSets/Your_InsectSound1000_version'
 
-# go through all the folders in the directorys:
+# Go through all the folders in the directories:
 for recording_date in [20231004,
                        20231005
                        #...
