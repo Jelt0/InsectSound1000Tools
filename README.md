@@ -6,5 +6,5 @@ The script reads tdms recording files from folders named with there recording da
 
 Please cite:
 
-Branding et al. (2023), Scientific Data, InsectSound1000 An Insect
-Sound Dataset for Deep Learning based Acoustic Insect Recognition
+Branding et al. (2023), Scientific Data, InsectSound1000 an Insect
+Sound Dataset for Deep Learning based acoustic Insect Recognition
